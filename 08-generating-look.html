@@ -61,10 +61,51 @@ const stepInterval = setInterval(() => {
     textEl.textContent = steps[stepIndex];
   }
 }, 900);
-setTimeout(() => {
+
+// Minimum time to show the loading animation, so it doesn't flash by
+// even if the API responds instantly.
+const MIN_DISPLAY_MS = 2800;
+const startTime = Date.now();
+
+function finishAndProceed(){
   clearInterval(stepInterval);
-  location.href = '09-pdp.html';
-}, 2800);
+  if(typeof showScreen === 'function'){ showScreen('screen-pdp'); }
+  else { location.href = '09-pdp.html'; }
+}
+
+function proceedRespectingMinTime(){
+  const elapsed = Date.now() - startTime;
+  const remaining = Math.max(0, MIN_DISPLAY_MS - elapsed);
+  setTimeout(finishAndProceed, remaining);
+}
+
+const modelImage = (typeof window !== 'undefined' && window.__userPhoto) || null;
+const garmentImage = (typeof window !== 'undefined' && window.__selectedGarment) || null;
+
+if(modelImage && garmentImage){
+  fetch('/api/tryon', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ modelImage, garmentImage }),
+  })
+    .then(res => res.json())
+    .then(data => {
+      if(data && data.imageUrl && typeof setUserPhoto === 'function'){
+        setUserPhoto(data.imageUrl);
+      }
+      proceedRespectingMinTime();
+    })
+    .catch(err => {
+      // API not reachable (e.g. running as a static file, or network issue) —
+      // fall back gracefully to whatever photo is already showing.
+      console.warn('Try-on API call failed, using existing photo:', err);
+      proceedRespectingMinTime();
+    });
+} else {
+  // No photo/garment tracked yet (e.g. screen opened directly) — just
+  // run the visual sequence without a real API call.
+  proceedRespectingMinTime();
+}
 </script>
 </body>
 </html>
